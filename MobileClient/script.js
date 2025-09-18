@@ -1,4 +1,4 @@
-const socket = io("/cel");
+const socket = io("/MobileClient");
 
 const picker = document.getElementById("picker");
 const debug = document.getElementById("debug");

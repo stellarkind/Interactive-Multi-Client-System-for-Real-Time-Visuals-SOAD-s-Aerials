@@ -182,9 +182,9 @@ app.get("/", (_, res) => {
   res.type("html").send(`
     <h1>TD Multi-UI Bridge</h1>
     <ul>
-      <li><a href="/desk/">/desk</a> — escena (time/season/vantage)</li>
-      <li><a href="/cel/">/cel</a> — móviles (color por usuario)</li>
-      <li><a href="/control/">/control</a> — speed/density/color maestro</li>
+      <li><a href="/DesktopClient/">/DesktopClient</a> — escena (time/season/vantage)</li>
+      <li><a href="/MobileClient/">/MobileClient</a> — móviles (color por usuario)</li>
+      <li><a href="/Control/">/Control</a> — speed/density/color maestro</li>
     </ul>
     <p>TD WebSocket: <code>ws://HOST:3000/td</code></p>
   `);

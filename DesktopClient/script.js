@@ -1,4 +1,4 @@
-const socket = io("/desk");
+const socket = io("/DesktopClient");
 
 const season = document.getElementById("season");
 const seasonVal = document.getElementById("seasonVal");
