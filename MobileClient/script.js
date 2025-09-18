@@ -1,4 +1,8 @@
 const socket = io("/MobileClient");
+let myId = null;
+let myColor = { r: 255, g: 255, b: 255 };
+const meId = document.getElementById("meId");
+const meHex = document.getElementById("meHex");
 
 const picker = document.getElementById("picker");
 const debug = document.getElementById("debug");
@@ -35,6 +39,14 @@ socket.on("state:init", (s) => {
 });
 
 socket.on("state", (payload) => renderDebug(payload.state));
+socket.on("you", ({ id, color }) => {
+  myId = id;
+  myColor = color;
+  meId.textContent = id;
+  meHex.textContent = rgbToHex(color);
+  // sincroniza el picker con tu color real en el server
+  picker.value = rgbToHex(color);
+});
 
 picker.addEventListener("input", () => {
   current.user_color = hexToRgbObject(picker.value);
