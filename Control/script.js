@@ -1,4 +1,4 @@
-const socket = io("/control");
+const socket = io("/Control");
 
 const speed = document.getElementById("speed");
 const speedVal = document.getElementById("speedVal");
