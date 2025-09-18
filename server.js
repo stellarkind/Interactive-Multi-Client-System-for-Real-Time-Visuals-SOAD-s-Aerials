@@ -73,11 +73,15 @@ function broadcastToTD() {
   wss.clients.forEach(ws => { if (ws.readyState === 1) ws.send(payload); });
 }
 function broadcastToWeb(part) {
-  io.emit("state", { part, state: fullStateForWeb() });
+  const payload = { part, state: fullStateForWeb() };
+  // emitir a los 3 namespaces reales
+  io.of("/DesktopClient").emit("state", payload);
+  io.of("/MobileClient").emit("state", payload);
+  io.of("/Control").emit("state", payload);
 }
 
 // ---------------------------
-// Namespaces SOLO con tus nombres
+// Namespaces
 // ---------------------------
 
 // DesktopClient
@@ -138,10 +142,6 @@ wss.on("connection", ws => {
     } catch (e) { console.error("WS TD parse error:", e); }
   });
 });
-
-// ---------------------------
-// Archivos estáticos SOLO en tus 3 rutas
-// (sirve desde /public/... y también desde carpetas raíz si las tienes ahí)
 // ---------------------------
 app.use("/DesktopClient", express.static("public/DesktopClient"));
 app.use("/MobileClient",  express.static("public/MobileClient"));
@@ -154,7 +154,7 @@ app.use("/Control",       express.static("Control"));
 // Página índice mínima
 app.get("/", (_req, res) => {
   res.type("html").send(`
-    <h1>TD Bridge</h1>
+    <h1>TD Puente de acceso a clientes</h1>
     <ul>
       <li><a href="/DesktopClient/">/DesktopClient/</a></li>
       <li><a href="/MobileClient/">/MobileClient/</a></li>
