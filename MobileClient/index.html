@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cel</title>
+  <style>
+    :root { color-scheme: dark light; }
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    label { display: inline-flex; align-items: center; gap: .75rem; }
+    input[type="color"] { width: 48px; height: 32px; padding: 0; border: none; }
+    pre { background: #1112; padding: .75rem; border-radius: 8px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>Cel (Dispositivo del público)</h1>
+
+  <p>El color que elijas representará tu “aerial” en la ciudad.</p>
+
+  <label>
+    Color:
+    <input id="picker" type="color" value="#ffffff">
+  </label>
+
+  <pre id="debug"></pre>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="./script.js"></script>
+</body>
+</html>
