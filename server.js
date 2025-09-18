@@ -7,10 +7,10 @@ import { WebSocketServer } from "ws";
 const app = express();
 const server = http.createServer(app);
 
-// --- Socket.IO (navegadores)
+// --- Socket.IO para navegadores (sirve /socket.io/socket.io.js)
 const io = new SocketIOServer(server, { cors: { origin: "*" } });
 
-// --- WebSocket crudo (TouchDesigner)
+// --- WebSocket crudo para TouchDesigner
 const wss = new WebSocketServer({ server, path: "/td" });
 
 // ---------------------------
@@ -63,10 +63,7 @@ function validateAndAssign(part, incoming) {
 }
 
 function fullStateForTD() {
-  return {
-    ...state,
-    aerials: { count: aerials.size, devices: Array.from(aerials.values()) }
-  };
+  return { ...state, aerials: { count: aerials.size, devices: Array.from(aerials.values()) } };
 }
 function fullStateForWeb() {
   return { ...state, aerials: { count: aerials.size } };
@@ -80,19 +77,12 @@ function broadcastToWeb(part) {
 }
 
 // ---------------------------
-// Namespaces (con aliases)
+// Namespaces SOLO con tus nombres
 // ---------------------------
-function bindNamespace(paths, onConnection) {
-  paths.forEach(path => {
-    io.of(path).on("connection", socket => {
-      console.log(`[io] ${path} connected: ${socket.id}`);
-      onConnection(socket);
-    });
-  });
-}
 
-// Desk ↔ /desk y /DesktopClient
-bindNamespace(["/desk", "/DesktopClient"], socket => {
+// DesktopClient
+io.of("/DesktopClient").on("connection", socket => {
+  console.log(`[io] /DesktopClient connected ${socket.id}`);
   socket.emit("state:init", fullStateForWeb());
   socket.on("update", payload => {
     validateAndAssign("desk", payload);
@@ -100,10 +90,12 @@ bindNamespace(["/desk", "/DesktopClient"], socket => {
   });
 });
 
-// Cel ↔ /cel y /MobileClient
-bindNamespace(["/cel", "/MobileClient"], socket => {
+// MobileClient
+io.of("/MobileClient").on("connection", socket => {
+  console.log(`[io] /MobileClient connected ${socket.id}`);
   const id = socket.id.slice(0, 6);
   aerials.set(id, { id, color: state.cel.user_color });
+
   socket.emit("state:init", fullStateForWeb());
   broadcastToTD(); broadcastToWeb("cel");
 
@@ -120,8 +112,9 @@ bindNamespace(["/cel", "/MobileClient"], socket => {
   });
 });
 
-// Control ↔ /control y /Control
-bindNamespace(["/control", "/Control"], socket => {
+// Control
+io.of("/Control").on("connection", socket => {
+  console.log(`[io] /Control connected ${socket.id}`);
   socket.emit("state:init", fullStateForWeb());
   socket.on("update", payload => {
     validateAndAssign("control", payload);
@@ -135,7 +128,6 @@ bindNamespace(["/control", "/Control"], socket => {
 wss.on("connection", ws => {
   console.log("[ws] TD connected");
   ws.send(JSON.stringify({ type: "fullState", data: fullStateForTD() }));
-
   ws.on("message", msg => {
     try {
       const parsed = JSON.parse(msg.toString());
@@ -148,38 +140,27 @@ wss.on("connection", ws => {
 });
 
 // ---------------------------
-// Static & rutas (con aliases)
+// Archivos estáticos SOLO en tus 3 rutas
+// (sirve desde /public/... y también desde carpetas raíz si las tienes ahí)
 // ---------------------------
-
-// 1) Aliases que sirven desde /public si lo usas así:
 app.use("/DesktopClient", express.static("public/DesktopClient"));
 app.use("/MobileClient",  express.static("public/MobileClient"));
 app.use("/Control",       express.static("public/Control"));
 
-// 2) Aliases que sirven carpetas raíz (por si están fuera de /public):
 app.use("/DesktopClient", express.static("DesktopClient"));
 app.use("/MobileClient",  express.static("MobileClient"));
 app.use("/Control",       express.static("Control"));
 
-// 3) Static genérico para lo que haya en /public (p.ej. /desk /cel /control)
-app.use(express.static("public"));
-
-app.get("/", (_, res) => {
+// Página índice mínima
+app.get("/", (_req, res) => {
   res.type("html").send(`
-    <h1>TD Multi-UI Bridge</h1>
-    <h3>Aliases</h3>
+    <h1>TD Bridge</h1>
     <ul>
       <li><a href="/DesktopClient/">/DesktopClient/</a></li>
       <li><a href="/MobileClient/">/MobileClient/</a></li>
       <li><a href="/Control/">/Control/</a></li>
     </ul>
-    <h3>Rutas directas (opcionales)</h3>
-    <ul>
-      <li><a href="/desk/">/desk/</a></li>
-      <li><a href="/cel/">/cel/</a></li>
-      <li><a href="/control/">/control/</a></li>
-    </ul>
-    <p>TD WebSocket: <code>ws://HOST:3000/td</code></p>
+    <p>WebSocket TD: <code>ws://HOST:3000/td</code></p>
   `);
 });
 
