@@ -1,57 +1,23 @@
-// MobileClient/script.js
-(function () {
-  let socket;
-  let picker, meIdEl, meHexEl, debugEl;
+const socket = io();
 
-  function renderDebug(payload) {
-    if (debugEl) debugEl.textContent = JSON.stringify(payload, null, 2);
-  }
+const picker = document.getElementById('picker');
+const me     = document.getElementById('me');
+const hexEl  = document.getElementById('hex');
+const debug  = document.getElementById('debug');
 
-  function emitMyColor() {
-    if (!socket || !picker) return;
-    const hex = picker.value || '#ffffff';
-    if (meHexEl) meHexEl.textContent = hex;
-    socket.emit('mobile:colorHex', hex);
-  }
+let myId = '—';
 
-  window.addEventListener('DOMContentLoaded', () => {
-    // Referencias del DOM
-    picker  = document.getElementById('picker');
-    meIdEl  = document.getElementById('meId');
-    meHexEl = document.getElementById('meHex');
-    debugEl = document.getElementById('debug');
+function render(payload){ debug.textContent = JSON.stringify(payload, null, 2); }
 
-    // Conexión Socket.IO (mismo host/puerto del server)
-    socket = io();
+socket.on('connect', ()=> console.log('Mobile conectado'));
 
-    // Te dice tu id de socket (para mostrarlo y para que el server te identifique)
-    socket.on('whoami', ({ id }) => {
-      if (meIdEl) meIdEl.textContent = id;
-    });
+socket.on('whoami', ({id}) => { myId = id; me.textContent = id.slice(0,6); });
 
-    // Estado inicial que envía el server al conectar
-    socket.on('state:init', (state) => {
-      renderDebug(state);
-      // Al conectar o reconectar, envía tu color actual para crear/actualizar tu antena
-      emitMyColor();
-    });
+socket.on('state:init', (s)=> render(s));
+socket.on('state', payload => render(payload.state || payload));
 
-    // Estado incremental (para debug en el móvil)
-    socket.on('state', ({ state }) => renderDebug(state));
-
-    // Si el usuario cambia el color, lo mandamos al server
-    if (picker) {
-      picker.addEventListener('input', emitMyColor);
-    }
-
-    // Si la pestaña vuelve a estar visible, reenvía tu color por si hubo reconexión
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') emitMyColor();
-    });
-
-    // Logs útiles
-    socket.on('connect', () => console.log('Mobile conectado'));
-    socket.on('disconnect', () => console.log('Mobile desconectado'));
-    socket.on('connect_error', (e) => console.error('Socket.IO error:', e));
-  });
-})();
+picker.addEventListener('input', ()=>{
+  const hex = picker.value;
+  hexEl.textContent = hex;
+  socket.emit('mobile:colorHex', hex);
+});

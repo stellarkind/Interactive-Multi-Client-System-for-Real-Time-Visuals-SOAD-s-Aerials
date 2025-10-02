@@ -13,14 +13,12 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  // CORS abierto local; ajusta si montas detrás de proxy/dominio
   cors: { origin: true, methods: ['GET', 'POST'] }
 });
 
 // ---------- estado en memoria ----------
 /**
- * aerials: Map<socketId, { id, color: {r,g,b}, hex }>
- * Se crea una entrada por **cada cliente móvil** conectado.
+ * aerials: Map<socketId, { id, color: {r,g,b}, hex, updatedAt? }>
  */
 const aerials = new Map();
 
@@ -33,17 +31,19 @@ const control = {
   color: { r: 255, g: 255, b: 255 }
 };
 
-// helpers
+// ---------- helpers ----------
 const rgbToHex = ({ r, g, b }) =>
   '#' +
   [r, g, b]
-    .map(v => Math.max(0, Math.min(255, Number(v) | 0))
-      .toString(16)
-      .padStart(2, '0'))
+    .map(v =>
+      Math.max(0, Math.min(255, Number(v) | 0))
+        .toString(16)
+        .padStart(2, '0')
+    )
     .join('');
 
 const hexToRgb = (hex) => {
-  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(String(hex || ''));
   if (!m) return { r: 255, g: 255, b: 255 };
   return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
 };
@@ -65,7 +65,7 @@ app.get('/', (_req, res) => {
       <li><a href="/visuals/">Visuals</a></li>
       <li><a href="/api/aerials">API · Aerials</a></li>
     </ul>
-    <p style="opacity:.7">Tip: si ves "Cannot GET /", entra por alguno de los enlaces arriba.</p>
+    <p style="opacity:.7">Si ves "Cannot GET /", entra por alguno de los enlaces de arriba.</p>
   `);
 });
 
@@ -81,29 +81,32 @@ app.get('/api/aerials', (_req, res) => {
 io.on('connection', (socket) => {
   const referer = (socket.handshake.headers.referer || '').toLowerCase();
 
-  // id para el cliente
+  // Identidad del socket
   socket.emit('whoami', { id: socket.id });
 
-  // ----- agrégate a "Visuales room" si lo pide (compat con tu código previo) -----
+  // Unirse a la room de Visuales (si el cliente lo pide)
   socket.on('messageClienteVisuales', () => {
     socket.join('Visuales room');
     console.log(`Client ${socket.id} joined 'Visuales room'`);
   });
 
-  // ----- CONTROL: sliders (compat con tu evento) -----
+  // ----- CONTROL: sliders -----
   socket.on('slider_changed', (data) => {
-    // data: { label, value }
+    // Persistir algunos sliders si te interesa (ejemplo speed/density)
     if (data && typeof data.label === 'string') {
       if (data.label === 'speed')   control.speed   = Number(data.value);
       if (data.label === 'density') control.density = Number(data.value);
-      // otros sliders personalizados:
-      // distance_near, distance_far, width_near, width_far, rows, columns, etc.
+      // Agrega aquí otros si quieres guardarlos: rows, columns, etc.
     }
-    // reenvía SOLO a Visuales (como tu server anterior)
+
+    // 1) Reenviar solo a Visuales (compat con tu proyecto anterior)
     io.to('Visuales room').emit('slider_changed', data);
+
+    // 2) Y emitir state a todos para debug/TD/UIs
+    io.emit('state', { state: { control, aerials: Array.from(aerials.values()) } });
   });
 
-  // ----- CONTROL: estado completo (si usas "update" desde un UI control) -----
+  // ----- CONTROL: estado completo (UI que manda todo el objeto) -----
   socket.on('update', (newControl) => {
     if (newControl && typeof newControl === 'object') {
       Object.assign(control, newControl);
@@ -116,32 +119,37 @@ io.on('connection', (socket) => {
   if (isMobileClient) {
     const defaultHex = '#ffffff';
     const rgb = hexToRgb(defaultHex);
-    const aerial = { id: socket.id, color: rgb, hex: defaultHex };
+    const aerial = { id: socket.id, color: rgb, hex: defaultHex, updatedAt: Date.now() };
     aerials.set(socket.id, aerial);
     console.log(`(MOBILE) Aerial creado: ${socket.id}`);
 
-    // enviar estado inicial al recién llegado (patrón "state:init")
+    // Estado inicial al que llega
     socket.emit('state:init', { control, aerials: Array.from(aerials.values()) });
 
-    // notificar a todos el nuevo estado
+    // Notificar a todos el estado
     io.emit('state', { state: { control, aerials: Array.from(aerials.values()) } });
   }
 
   // ----- MOBILE: cambio de color por HEX -----
   socket.on('mobile:colorHex', (hex) => {
     const a = aerials.get(socket.id);
-    if (!a) return; // ignora si no es un cliente móvil registrado
-    const rgb = hexToRgb(String(hex || '#ffffff'));
+    if (!a) return;
+    const rgb = hexToRgb(hex);
     a.color = rgb;
     a.hex = rgbToHex(rgb);
+    a.updatedAt = Date.now();
     aerials.set(socket.id, a);
 
-    // 1) broadcast de estado (para UIs)
     io.emit('state', { state: { control, aerials: Array.from(aerials.values()) } });
 
-    // 2) evento "color" para TouchDesigner (compat con tu callback que lee message['x'])
-    //    Enviamos el rojo como 'x' (puedes extender con y,z si quieres g,b)
-    io.emit('color', { type: 'color', x: rgb.r });
+    // Evento incremental para TD (incluye id y rgb completos)
+    io.emit('color', {
+      type: 'color',
+      id: socket.id,
+      r: rgb.r, g: rgb.g, b: rgb.b,
+      hex: a.hex,
+      updatedAt: a.updatedAt
+    });
   });
 
   // ----- MOBILE: cambio de color por RGB -----
@@ -155,21 +163,28 @@ io.on('connection', (socket) => {
     };
     a.color = safe;
     a.hex = rgbToHex(safe);
+    a.updatedAt = Date.now();
     aerials.set(socket.id, a);
 
     io.emit('state', { state: { control, aerials: Array.from(aerials.values()) } });
-    io.emit('color', { type: 'color', x: safe.r });
+
+    // Evento incremental para TD (incluye id y rgb completos)
+    io.emit('color', {
+      type: 'color',
+      id: socket.id,
+      r: safe.r, g: safe.g, b: safe.b,
+      hex: a.hex,
+      updatedAt: a.updatedAt
+    });
   });
 
-  // ----- ejemplo de respuesta a mobile (compat "answer_mobile"/"message_controller") -----
-  // si ya usas estos eventos en tus clientes, puedes re-emitirlos
+  // ----- Mensajes varios (compat con proyecto de tus compas) -----
   socket.on('message_controller', (estado) => {
-    // solo re-envía a Visuales; ajusta según tu lógica
     io.to('Visuales room').emit('answer_mobile', { from: socket.id, estado });
   });
 
+  // ----- desconexión -----
   socket.on('disconnect', () => {
-    // si era un móvil, elimina su aerial
     if (aerials.has(socket.id)) {
       aerials.delete(socket.id);
       console.log(`(MOBILE) Aerial removido: ${socket.id}`);
@@ -180,6 +195,6 @@ io.on('connection', (socket) => {
 
 // ---------- start ----------
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () =>
-  console.log(`Listening on http://localhost:${PORT}`)
-);
+server.listen(PORT, () => {
+  console.log(`Listening on http://localhost:${PORT}`);
+});

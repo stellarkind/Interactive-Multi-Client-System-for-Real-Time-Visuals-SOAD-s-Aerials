@@ -1,19 +1,26 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Visuals (Viewer)</title>
-  <script src="https://cdn.jsdelivr.net/npm/p5@1.11.0/lib/p5.min.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Visuals</title>
   <style>
     :root { color-scheme: dark light; }
-    body,html { margin:0; padding:0; height:100%; }
-    #hud { position:fixed; left:.75rem; top:.5rem; font:12px/1.2 system-ui, sans-serif; opacity:.8; }
-    #hud code { background:#0003; padding:.15rem .35rem; border-radius:6px; }
+    body { margin:0; background:#0a0a0a; color:#ddd; font-family: system-ui, sans-serif; }
+    #ui { position: fixed; top: 8px; left: 10px; font-size: 14px; }
+    canvas { display:block; width:100vw; height:100vh; }
+    pre { background:#1118; padding:.5rem; border-radius:8px; max-width:480px; }
   </style>
 </head>
 <body>
+  <div id="ui">
+    <div><strong id="status">Conectando…</strong> · <span id="count">0</span> antenas</div>
+    <div>speed: <span id="spd">—</span> · density: <span id="dns">—</span></div>
+    <pre id="debug"></pre>
+  </div>
+  <canvas id="c"></canvas>
+
+  <script src="/socket.io/socket.io.js"></script>
   <script src="./script.js"></script>
 </body>
 </html>

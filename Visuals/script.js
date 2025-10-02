@@ -1,74 +1,86 @@
-// Visuals/script.js
-let socket;
-let current = { control: { speed: 0.5, density: 0.5 }, aerials: [] };
-let connected = false;
+const socket = io();
 
-function setup() {
-  createCanvas(windowWidth, windowHeight);
-  noStroke();
-  textFont('system-ui, sans-serif');
+// UI
+const statusEl = document.getElementById('status');
+const countEl  = document.getElementById('count');
+const spdEl    = document.getElementById('spd');
+const dnsEl    = document.getElementById('dns');
+const debugEl  = document.getElementById('debug');
 
-  socket = io();
+// Canvas
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
 
-  socket.on('connect', () => { connected = true; });
-  socket.on('disconnect', () => { connected = false; });
-
-  socket.on('state:init', (payload) => {
-    current.control = payload.control ?? current.control;
-    current.aerials = payload.aerials ?? [];
-  });
-
-  socket.on('state', ({ state }) => {
-    if (!state) return;
-    if (state.control) current.control = state.control;
-    if (state.aerials) current.aerials = state.aerials;
-  });
-
-  // compat con tu server anterior: ver cambios de sliders
-  socket.on('slider_changed', (d) => {
-    // si quieres, refleja sliders en pantalla:
-    // console.log('slider_changed', d);
-  });
+let WIDTH = 0, HEIGHT = 0;
+function resize(){
+  WIDTH = canvas.width  = window.innerWidth;
+  HEIGHT = canvas.height = window.innerHeight;
 }
+window.addEventListener('resize', resize);
+resize();
 
-function draw() {
-  background(20);
+// estado local
+let state = {
+  control: { speed: 0.5, density: 0.5 },
+  aerials: []
+};
 
-  // header
-  fill(200);
-  textSize(14);
-  const msg = connected ? 'Conectado' : 'Conectando...';
-  text(`${msg}   ·   ${current.aerials.length} antenas`, 10, 18);
+function renderDebug(payload){ debugEl.textContent = JSON.stringify(payload, null, 2); }
+function rgb({r,g,b}){ return `rgb(${r},${g},${b})`; }
 
-  // dibujar antenas en una malla responsive
-  const n = current.aerials.length;
-  if (n === 0) return;
+socket.on('connect', ()=>{
+  statusEl.textContent = 'Conectado';
+  socket.emit('messageClienteVisuales'); // ¡únete a la room!
+});
 
-  const cols = ceil(sqrt(n));
-  const rows = ceil(n / cols);
-  const padding = 24;
-  const cellW = (width - padding * 2) / cols;
-  const cellH = (height - padding * 2) / rows;
-  const r = min(cellW, cellH) * 0.35; // radio del círculo
+socket.on('state:init', (s)=>{
+  state.control = s.control || state.control;
+  state.aerials = s.aerials || [];
+  spdEl.textContent = Number(state.control.speed).toFixed(2);
+  dnsEl.textContent = Number(state.control.density).toFixed(2);
+  countEl.textContent = String(state.aerials.length);
+  renderDebug(s);
+});
 
-  current.aerials.forEach((a, idx) => {
-    const c = a.color || { r: 255, g: 255, b: 255 };
-    const col = idx % cols;
-    const row = floor(idx / cols);
-    const cx = padding + col * cellW + cellW / 2;
-    const cy = padding + row * cellH + cellH / 2;
+socket.on('state', ({state: s})=>{
+  if (s?.control) state.control = s.control;
+  if (s?.aerials) state.aerials = s.aerials;
+  spdEl.textContent = Number(state.control.speed).toFixed(2);
+  dnsEl.textContent = Number(state.control.density).toFixed(2);
+  countEl.textContent = String(state.aerials.length);
+  renderDebug(s);
+});
 
-    fill(c.r, c.g, c.b);
-    circle(cx, cy, r * 2);
+socket.on('slider_changed', d=>{
+  // Solo para mostrar
+  if (d?.label === 'speed')   { state.control.speed   = Number(d.value); spdEl.textContent = Number(d.value).toFixed(2); }
+  if (d?.label === 'density') { state.control.density = Number(d.value); dnsEl.textContent = Number(d.value).toFixed(2); }
+});
 
-    // id (pequeño) bajo el círculo
-    fill(220);
-    textAlign(CENTER);
-    textSize(12);
-    text(a.id?.slice(0, 5) ?? '?', cx, cy + r + 14);
+socket.on('color', msg=>{
+  // Mensaje incremental (ya impacta en state por el broadcast de 'state'),
+  // pero lo dejamos por si quieres animar eventos momentáneos.
+  // console.log('color', msg);
+});
+
+// loop de dibujo simple: distribuye antenas en círculo
+function draw(){
+  ctx.clearRect(0,0,WIDTH,HEIGHT);
+  const n = state.aerials.length || 1;
+  const radius = Math.min(WIDTH, HEIGHT) * 0.35;
+  const cx = WIDTH/2, cy = HEIGHT/2;
+
+  state.aerials.forEach((a, i)=>{
+    const t = (i / n) * Math.PI * 2 + performance.now() * 0.0003 * state.control.speed;
+    const x = cx + Math.cos(t) * radius;
+    const y = cy + Math.sin(t) * radius;
+    ctx.beginPath();
+    ctx.arc(x, y, 18 + 10*state.control.density, 0, Math.PI*2);
+    ctx.fillStyle = a?.hex || rgb(a?.color || {r:255,g:255,b:255});
+    ctx.fill();
+    ctx.closePath();
   });
-}
 
-function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
+  requestAnimationFrame(draw);
 }
+draw();
