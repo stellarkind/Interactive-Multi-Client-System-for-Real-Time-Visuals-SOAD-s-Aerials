@@ -1,54 +1,57 @@
-const socket = io("/MobileClient");
-let myId = null;
-let myColor = { r: 255, g: 255, b: 255 };
-const meId = document.getElementById("meId");
-const meHex = document.getElementById("meHex");
+// MobileClient/script.js
+(function () {
+  let socket;
+  let picker, meIdEl, meHexEl, debugEl;
 
-const picker = document.getElementById("picker");
-const debug = document.getElementById("debug");
+  function renderDebug(payload) {
+    if (debugEl) debugEl.textContent = JSON.stringify(payload, null, 2);
+  }
 
-function hexToRgbObject(hex) {
-  const v = hex.replace("#", "");
-  const bigint = parseInt(v, 16);
-  return {
-    r: (bigint >> 16) & 255,
-    g: (bigint >> 8) & 255,
-    b: bigint & 255
-  };
-}
+  function emitMyColor() {
+    if (!socket || !picker) return;
+    const hex = picker.value || '#ffffff';
+    if (meHexEl) meHexEl.textContent = hex;
+    socket.emit('mobile:colorHex', hex);
+  }
 
-function rgbToHex({ r, g, b }) {
-  return (
-    "#" +
-    [r, g, b]
-      .map(n => Math.max(0, Math.min(255, n | 0)).toString(16).padStart(2, "0"))
-      .join("")
-  );
-}
+  window.addEventListener('DOMContentLoaded', () => {
+    // Referencias del DOM
+    picker  = document.getElementById('picker');
+    meIdEl  = document.getElementById('meId');
+    meHexEl = document.getElementById('meHex');
+    debugEl = document.getElementById('debug');
 
-let current = { user_color: { r: 255, g: 255, b: 255 } };
+    // Conexión Socket.IO (mismo host/puerto del server)
+    socket = io();
 
-function renderDebug(payload) {
-  debug.textContent = JSON.stringify(payload, null, 2);
-}
+    // Te dice tu id de socket (para mostrarlo y para que el server te identifique)
+    socket.on('whoami', ({ id }) => {
+      if (meIdEl) meIdEl.textContent = id;
+    });
 
-socket.on("state:init", (s) => {
-  current = s.cel;
-  picker.value = rgbToHex(s.cel.user_color);
-  renderDebug(s);
-});
+    // Estado inicial que envía el server al conectar
+    socket.on('state:init', (state) => {
+      renderDebug(state);
+      // Al conectar o reconectar, envía tu color actual para crear/actualizar tu antena
+      emitMyColor();
+    });
 
-socket.on("state", (payload) => renderDebug(payload.state));
-socket.on("you", ({ id, color }) => {
-  myId = id;
-  myColor = color;
-  meId.textContent = id;
-  meHex.textContent = rgbToHex(color);
-  // sincroniza el picker con tu color real en el server
-  picker.value = rgbToHex(color);
-});
+    // Estado incremental (para debug en el móvil)
+    socket.on('state', ({ state }) => renderDebug(state));
 
-picker.addEventListener("input", () => {
-  current.user_color = hexToRgbObject(picker.value);
-  socket.emit("update", current);
-});
+    // Si el usuario cambia el color, lo mandamos al server
+    if (picker) {
+      picker.addEventListener('input', emitMyColor);
+    }
+
+    // Si la pestaña vuelve a estar visible, reenvía tu color por si hubo reconexión
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') emitMyColor();
+    });
+
+    // Logs útiles
+    socket.on('connect', () => console.log('Mobile conectado'));
+    socket.on('disconnect', () => console.log('Mobile desconectado'));
+    socket.on('connect_error', (e) => console.error('Socket.IO error:', e));
+  });
+})();
