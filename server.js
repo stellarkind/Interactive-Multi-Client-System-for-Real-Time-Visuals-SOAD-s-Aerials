@@ -7,6 +7,8 @@ import { WebSocketServer } from "ws";
 const app = express();
 const server = http.createServer(app);
 const io = new SocketIOServer(server, { cors: { origin: "*" } });
+
+// ===== WS (opcional, ya lo tenías) =====
 const wss = new WebSocketServer({ server, path: "/td" });
 
 // ---------- Estado global ----------
@@ -61,10 +63,24 @@ function fullStateForWeb() {
   return { ...state, aerials: { count: aerials.size, devices: aerialsArray() } };
 }
 
-function broadcastToTD() {
+// ===== Socket.IO namespace solo para TouchDesigner =====
+const ioTD = io.of("/td-sio");
+
+function broadcastToTD_SIO() {
+  // evento plano y fácil de manejar desde TD
+  ioTD.emit("dataToTD", { type: "fullState", data: fullStateForTD() });
+}
+
+function broadcastToTD_WS() {
   const payload = JSON.stringify({ type: "fullState", data: fullStateForTD() });
   wss.clients.forEach(ws => { if (ws.readyState === 1) ws.send(payload); });
 }
+
+function broadcastToTD() {
+  broadcastToTD_SIO();
+  broadcastToTD_WS(); // si no usarás WS, puedes comentar esta línea
+}
+
 function broadcastToWeb(part) {
   const payload = { part, state: fullStateForWeb() };
   io.of("/DesktopClient").emit("state", payload);
@@ -72,7 +88,7 @@ function broadcastToWeb(part) {
   io.of("/Control").emit("state",       payload);
 }
 
-// ---------- Namespaces ----------
+// ---------- Namespaces Web ----------
 io.of("/DesktopClient").on("connection", socket => {
   socket.emit("state:init", fullStateForWeb());
   socket.on("update", payload => { validateAndAssign("desk", payload); broadcastToTD(); broadcastToWeb("desk"); });
@@ -111,7 +127,23 @@ io.of("/Control").on("connection", socket => {
   socket.on("update", payload => { validateAndAssign("control", payload); broadcastToTD(); broadcastToWeb("control"); });
 });
 
-// ---------- WebSocket TD ----------
+// ---------- Socket.IO para TD ----------
+ioTD.on("connection", socket => {
+  // 1) Al abrir, mandar estado completo
+  socket.emit("dataToTD", { type: "fullState", data: fullStateForTD() });
+
+  // 2) Si TD te manda cambios (opcional), acepta un shape uniforme:
+  //    socket.emit('updateFromTD', { part: 'control'|'desk'|'cel', data: {...} })
+  socket.on("updateFromTD", ({ part, data }) => {
+    if (part && data) {
+      validateAndAssign(part, data);
+      broadcastToTD(); // reenvía a todos los TD conectados (y WS)
+      broadcastToWeb(part);
+    }
+  });
+});
+
+// ---------- WebSocket TD (lo que ya tenías) ----------
 wss.on("connection", ws => {
   ws.send(JSON.stringify({ type: "fullState", data: fullStateForTD() }));
   ws.on("message", msg => {
@@ -147,7 +179,8 @@ app.get("/", (_req, res) => {
       <li><a href="/MobileClient/">/MobileClient/</a></li>
       <li><a href="/Control/">/Control/</a></li>
     </ul>
-    <p>WS TD: <code>ws://HOST:3000/td</code></p>
+    <p>Socket.IO TD namespace: <code>ws://HOST:3000/td-sio</code></p>
+    <p>WS TD: <code>ws://HOST:3000/td</code> (opcional)</p>
     <p>API antenas: <code>/api/aerials</code></p>
   `);
 });
