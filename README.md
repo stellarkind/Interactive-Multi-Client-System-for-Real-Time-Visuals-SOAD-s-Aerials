@@ -5,6 +5,8 @@
 ### Descripción breve:
 Sistema distribuido con múltiples clientes (Mobile, Control, Desktop, Visuals) que envían/reciben datos vía Socket.IO hacia/desde un servidor Node.js. TouchDesigner renderiza visuales en tiempo real usando los datos agregados (colores por antena, parámetros de escena). La pieza explora agencia distribuida del público mediante móviles y una dirección de escena desde Control.
 
+[Playlist Interpretación visual en TouchDesigner Aerials](https://www.youtube.com/playlist?list=PL3luto4uXITXQr0wZogAYSxRoQoYmAHNi)
+
 ## Arquitectura (alto nivel):
 **Clientes web (Mobile/Control/Desktop/Visuals)** ←→ **Socket.IO** ←→ **Node.js (server.js)** ←→ **TouchDesigner.**  
 **Estado compartido:** control (sliders, color maestro) + aerials (mapa de móviles {id, color}).  
@@ -37,3 +39,4 @@ npm start
 
 ## Créditos y licencias:
 Canción Aerials de System of a Down usada con fines educativos (no comercial). Código utilizado en touchdesigner y servidor bajo MIT.
+
